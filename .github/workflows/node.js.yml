@@ -1,0 +1,178 @@
+# This workflow will do a clean install of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
+
+name: Node.js CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  # Web_Logic_Test:  
+  #   runs-on: ${{ matrix.os }}
+
+  #   strategy:
+  #     matrix:
+  #       os: [ubuntu-latest,windows-latest]
+  #       node-version: [15.x]
+
+  #   steps:
+  #   - uses: actions/checkout@v2
+  #   - name: Use Node.js ${{ matrix.node-version }}
+  #     uses: actions/setup-node@v1
+  #     with:
+  #       node-version: ${{ matrix.node-version }}
+    
+  #   - run: npm ci
+  #   - run: npm run build --if-present
+  
+  Android_RELEASE_APK_Build: # make sure the action works on a clean machine without building
+    #needs: [ Web_Logic_Test ]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Uses actions/checkout@2
+      uses: actions/checkout@v2
+    
+    - name: Java install
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+    - name: Use coturiv/setup-ionic java
+      uses: coturiv/setup-ionic@v1.0.4
+      with:
+        cordova-version: 10
+
+    - name: Build app-release-unsigned.apk ionic
+      run: |
+        ionic cordova platform add android@latest
+        ionic cordova build android --release --info --scan --prod --aot=true --build-optimizer=false --vender-chunk=true 
+        
+    - name: Sign the release.APK
+      uses: r0adkll/sign-android-release@v1
+      with:
+        releaseDirectory: platforms/android/app/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+        alias: ${{ secrets.ALIAS_NAME }}
+        keyStorePassword: ${{ secrets.KEYSTORE_PWD }}
+        keyPassword: ${{ secrets.KEYSTORE_PWD }}
+        
+    - name: Upload app-release-signed.apk to Git Artifact
+      uses: actions/upload-artifact@master
+      with:
+        name: app-release-signed.apk
+        path: platforms/android/app/build/outputs/apk/release/app-release-unsigned-signed.apk
+        
+        
+  Android_DEBUG_APK_Build: # make sure the action works on a clean machine without building
+    #needs: [ Web_Logic_Test ]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Uses actions/checkout@2
+      uses: actions/checkout@v2
+    
+    - name: Java install
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+    - name: Use coturiv/setup-ionic java
+      uses: coturiv/setup-ionic@v1.0.4
+      with:
+        cordova-version: 10
+
+    - name: Build app-debug.apk ionic
+      run: |
+        ionic cordova platform add android@latest
+        ionic cordova build android --debug
+        
+    - name: Sign the debug.APK
+      uses: r0adkll/sign-android-release@v1
+      with:
+        releaseDirectory: platforms/android/app/build/outputs/apk/debug
+        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+        alias: ${{ secrets.ALIAS_NAME }}
+        keyStorePassword: ${{ secrets.KEYSTORE_PWD }}
+        keyPassword: ${{ secrets.KEYSTORE_PWD }}
+        
+    - name: Upload app-debug-signed.apk to Git Artifact
+      uses: actions/upload-artifact@master
+      with:
+        name: app-debug-unsigned-signed.apk
+        path: platforms/android/app/build/outputs/apk/debug/app-debug-signed.apk
+        
+  # Android_RELEASE_BUNDLE_Build: # make sure the action works on a clean machine without building
+  #   #needs: [ Web_Logic_Test ]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Uses actions/checkout@2
+  #     uses: actions/checkout@v2
+    
+  #   - name: Java install
+  #     uses: actions/setup-java@v1
+  #     with:
+  #       java-version: 1.8
+  #   - name: Use coturiv/setup-ionic java
+  #     uses: coturiv/setup-ionic@v1.0.3
+  #     with:
+  #       cordova-version: 10
+
+  #   - name: Build app-release-unsigned.aab ionic
+  #     run: |
+  #       ionic cordova platform add android@latest
+  #       ionic cordova build android --prod --release -- -- --packageType=bundle
+        
+  #   - name: Sign the release.aab
+  #     uses: r0adkll/sign-android-release@v1
+  #     with:
+  #       releaseDirectory: platforms/android/app/build/outputs/bundle/release
+  #       signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+  #       alias: ${{ secrets.ALIAS_NAME }}
+  #       keyStorePassword: ${{ secrets.KEYSTORE_PWD }}
+  #       keyPassword: ${{ secrets.KEYSTORE_PWD }}
+        
+  #   - name: Upload app-release-signed.aab to Git Artifact
+  #     uses: actions/upload-artifact@master
+  #     with:
+  #       name: app-release-signed.aab
+  #       path: platforms/android/app/build/outputs/bundle/release/app-release.aab
+
+  Ionic_Karma-Code_Coverage:
+  
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        node-version: [15.x]
+
+    steps:
+
+    - name: Uses actions/checkout@2
+      uses: actions/checkout@v2
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Clean Install Dependency in Project
+      run: npm ci
+
+    - name: Build Project
+      run: npm run build --if-present
+
+    - name: Unit Test Case Report Generation
+      run: npm run karma-report
+
+    - name: Uses codecov/codecov-action@v1.5.2
+      uses: codecov/codecov-action@v1.5.2
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Upload app-release-signed.apk to Git Artifact
+      uses: actions/upload-artifact@master
+      with:
+        name: karma_coverage_report
+        path: coverage
